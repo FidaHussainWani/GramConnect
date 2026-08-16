@@ -2,13 +2,17 @@ package com.gramconnect.service;
 
 import com.gramconnect.dto.ComplaintRequest;
 import com.gramconnect.dto.ComplaintResponse;
+import com.gramconnect.dto.ComplaintStatusHistoryResponse;
 import com.gramconnect.entity.*;
 import com.gramconnect.repository.ComplaintRepository;
+import com.gramconnect.repository.ComplaintStatusHistoryRepository;
 import com.gramconnect.repository.DepartmentRepository;
 import com.gramconnect.repository.UserRepository;
 import com.gramconnect.repository.VillageRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import com.gramconnect.dto.ComplaintStatusHistoryResponse;
+import com.gramconnect.repository.ComplaintStatusHistoryRepository;
 
 import java.time.Year;
 import java.util.List;
@@ -17,6 +21,7 @@ import java.util.List;
 @RequiredArgsConstructor
 public class ComplaintService {
 
+    private final ComplaintStatusHistoryRepository historyRepository;
     private final ComplaintRepository complaintRepository;
     private final UserRepository userRepository;
     private final VillageRepository villageRepository;
@@ -65,6 +70,16 @@ public class ComplaintService {
 
         Complaint savedComplaint =
                 complaintRepository.save(complaint);
+                ComplaintStatusHistory history =
+        ComplaintStatusHistory.builder()
+                .complaint(savedComplaint)
+                .oldStatus(null)
+                .newStatus(ComplaintStatus.SUBMITTED)
+                .changedBy(user)
+                .remarks("Complaint submitted by citizen")
+                .build();
+
+        historyRepository.save(history);
 
         return mapToResponse(savedComplaint);
     }
@@ -139,4 +154,68 @@ public class ComplaintService {
                 .resolvedAt(complaint.getResolvedAt())
                 .build();
     }
+    public ComplaintResponse updateStatus(
+        Long complaintId,
+        ComplaintStatus newStatus,
+        User changedBy,
+        String remarks) {
+
+    Complaint complaint = complaintRepository.findById(complaintId)
+            .orElseThrow(() ->
+                    new RuntimeException("Complaint not found"));
+
+    ComplaintStatus oldStatus = complaint.getStatus();
+
+    complaint.setStatus(newStatus);
+
+    if (newStatus == ComplaintStatus.RESOLVED
+            || newStatus == ComplaintStatus.VERIFIED) {
+
+        if (complaint.getResolvedAt() == null) {
+            complaint.setResolvedAt(
+                    java.time.LocalDateTime.now()
+            );
+        }
+    }
+
+    Complaint updatedComplaint =
+            complaintRepository.save(complaint);
+
+    ComplaintStatusHistory history =
+            ComplaintStatusHistory.builder()
+                    .complaint(updatedComplaint)
+                    .oldStatus(oldStatus)
+                    .newStatus(newStatus)
+                    .changedBy(changedBy)
+                    .remarks(remarks)
+                    .build();
+
+    historyRepository.save(history);
+
+    return mapToResponse(updatedComplaint);
+}
+
+public List<ComplaintStatusHistoryResponse> getStatusHistory(
+        Long complaintId) {
+
+    return historyRepository
+            .findByComplaintIdOrderByCreatedAtAsc(complaintId)
+            .stream()
+            .map(history ->
+                    ComplaintStatusHistoryResponse.builder()
+                            .id(history.getId())
+                            .oldStatus(history.getOldStatus())
+                            .newStatus(history.getNewStatus())
+                            .changedBy(
+                                    history.getChangedBy().getId()
+                            )
+                            .changedByName(
+                                    history.getChangedBy().getName()
+                            )
+                            .remarks(history.getRemarks())
+                            .createdAt(history.getCreatedAt())
+                            .build()
+            )
+            .toList();
+}
 }

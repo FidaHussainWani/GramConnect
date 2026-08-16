@@ -1,8 +1,15 @@
 package com.gramconnect.controller;
 
+import org.springframework.security.core.Authentication;
 import com.gramconnect.dto.ComplaintRequest;
 import com.gramconnect.dto.ComplaintResponse;
+import com.gramconnect.dto.ComplaintStatusHistoryResponse;
+import com.gramconnect.dto.ComplaintStatusUpdateRequest;
 import com.gramconnect.service.ComplaintService;
+import com.gramconnect.entity.User;
+import com.gramconnect.dto.ComplaintStatusUpdateRequest;
+import com.gramconnect.entity.ComplaintStatus;
+import com.gramconnect.dto.ComplaintStatusHistoryResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -18,20 +25,22 @@ public class ComplaintController {
 
     private final ComplaintService complaintService;
 
-    @PostMapping
-    public ResponseEntity<ComplaintResponse> createComplaint(
-            @RequestParam Long userId,
-            @Valid @RequestBody ComplaintRequest request) {
+@PostMapping
+public ResponseEntity<ComplaintResponse> createComplaint(
+        Authentication authentication,
+        @Valid @RequestBody ComplaintRequest request) {
 
-        return ResponseEntity
-                .status(HttpStatus.CREATED)
-                .body(
-                        complaintService.createComplaint(
-                                userId,
-                                request
-                        )
-                );
-    }
+    User user = (User) authentication.getPrincipal();
+
+    return ResponseEntity
+            .status(HttpStatus.CREATED)
+            .body(
+                    complaintService.createComplaint(
+                            user.getId(),
+                            request
+                    )
+            );
+}
 
     @GetMapping("/{id}")
     public ResponseEntity<ComplaintResponse> getComplaint(
@@ -42,12 +51,14 @@ public class ComplaintController {
         );
     }
 
-    @GetMapping("/my")
+   @GetMapping("/my")
     public ResponseEntity<List<ComplaintResponse>> getMyComplaints(
-            @RequestParam Long userId) {
+            Authentication authentication) {
+
+        User user = (User) authentication.getPrincipal();
 
         return ResponseEntity.ok(
-                complaintService.getMyComplaints(userId)
+                complaintService.getMyComplaints(user.getId())
         );
     }
 
@@ -58,4 +69,30 @@ public class ComplaintController {
                 complaintService.getAllComplaints()
         );
     }
+
+    @PutMapping("/{id}/status")
+public ResponseEntity<ComplaintResponse> updateStatus(
+        @PathVariable Long id,
+        @Valid @RequestBody ComplaintStatusUpdateRequest request,
+        Authentication authentication) {
+
+    User user = (User) authentication.getPrincipal();
+
+    return ResponseEntity.ok(
+            complaintService.updateStatus(
+                    id,
+                    request.getStatus(),
+                    user,
+                    request.getRemarks()
+            )
+    );
+}
+@GetMapping("/{id}/history")
+public ResponseEntity<List<ComplaintStatusHistoryResponse>> getHistory(
+        @PathVariable Long id) {
+
+    return ResponseEntity.ok(
+            complaintService.getStatusHistory(id)
+    );
+}
 }
